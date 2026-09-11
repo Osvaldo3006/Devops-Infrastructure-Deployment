@@ -1,0 +1,30 @@
+---
+- name: Provision production server in Aws with Docker
+  hosts: production_servers
+  become: true
+
+  tasks:
+    - name: Apt update
+      apt:
+        update_cache: yes
+        force_apt_get: yes
+
+    - name: Install dependencies for Docker
+      apt:
+        name: 
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+    - name: Install Docker
+      shell: "curl -fsSL https://docker.com | sudo sh"
+      args:
+        creates: /usr/bin/docker
+    - name: Make sure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
