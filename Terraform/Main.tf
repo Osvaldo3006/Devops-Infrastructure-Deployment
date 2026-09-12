@@ -7,66 +7,130 @@ terraform {
   }
 }
 
-provider "aws" {
-  region = "us-east-1" # Aqui puedes cambiar la region a la que sea mas de tu conveniencia
+variable "aws_region" {
+  description = "AWS region where the monitor server will be created."
+  type        = string
+  default     = "us-east-1"
 }
 
-# 1. Crear el Security Group (Firewall) con los puertos que necesitamos para Ansible, Flask y Kubernetes
+variable "instance_type" {
+  description = "EC2 instance type for the monitor server."
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "key_name" {
+  description = "Existing AWS EC2 key pair name used for SSH access."
+  type        = string
+}
+
+variable "ssh_cidr_blocks" {
+  description = "CIDR blocks allowed to connect to SSH. Keep this limited to trusted admin IPs."
+  type        = set(string)
+}
+
+variable "nodeport_cidr_blocks" {
+  description = "CIDR blocks allowed to reach the Kubernetes NodePort. Empty disables public NodePort access."
+  type        = set(string)
+  default     = []
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"]
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
+# 1. Create a security group with restricted inbound access.
 resource "aws_security_group" "monitor_sg" {
   name        = "monitor-project-sg"
-  description = "Firewall para el proyecto de monitoreo DevOps"
+  description = "Firewall for the DevOps monitoring project"
 
-  # Puerto para Ansible (SSH)
+  # SSH is limited to the administrator-provided CIDR blocks.
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Aqui depende si quieres que sea abierto a todo el mundo o solo a tu IP, puedes cambiarlo a tu IP para mayor seguridad
+    cidr_blocks = var.ssh_cidr_blocks
   }
 
-  # Puerto para la API de Flask
-  ingress {
-    from_port   = 5000
-    to_port     = 5000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+  # NodePort access is optional and restricted when enabled.
+  dynamic "ingress" {
+    for_each = length(var.nodeport_cidr_blocks) > 0 ? [true] : []
+    content {
+      from_port   = 32000
+      to_port     = 32000
+      protocol    = "tcp"
+      cidr_blocks = var.nodeport_cidr_blocks
+    }
   }
 
-  # Puerto exterior para el servicio de Kubernetes (NodePort)
-  ingress {
-    from_port   = 32000
-    to_port     = 32000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Regla de salida: Permitir que el servidor descargue Docker y pings a internet
+  # HTTPS is required for package downloads and the Docker installation script.
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # DNS is required for hostname resolution.
+  egress {
+    from_port   = 53
+    to_port     = 53
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 53
+    to_port     = 53
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # ICMP is required by Monitor.py for ping checks.
+  egress {
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
-# 2. Crear la Instancia EC2 dentro de la Capa Gratuita
+# 2. Create the EC2 instance.
 resource "aws_instance" "monitor_server" {
-  ami           = "ami-0866a3c8686eaeeba" # ID de Ubuntu 22.04 LTS en us-east-1 (Free Tier)
-  instance_type = "t2.micro"             # Capa gratuita de AWS (1GB RAM)
-  
-  # Le pegamos el firewall que creamos arriba
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = var.instance_type
+  key_name      = var.key_name
+
   vpc_security_group_ids = [aws_security_group.monitor_sg.id]
-  
-  key_name = "mi-llave-aws" # El nombre de tu llave .pem en AWS
 
   tags = {
-    Name = "servidor-monitor-devops"
+    Name        = "servidor-monitor-devops"
     Environment = "Production"
   }
 }
 
-# 3. Output: Al terminar, Terraform te pintará en la pantalla la IP para Ansible
+# 3. Output the public IP for Ansible.
 output "instancia_ip_publica" {
   value       = aws_instance.monitor_server.public_ip
-  description = "Copia esta IP y pégala en tu archivo inventory.ini de Ansible"
+  description = "Public IP to add to the Ansible inventory"
 }

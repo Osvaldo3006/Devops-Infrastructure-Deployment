@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monitor-server
+  labels:
+    app: monitor-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: monitor-server
+  template:
+    metadata:
+      labels:
+        app: monitor-server
+    spec:
+      containers:
+        - name: ping-monitor
+          image: osva3097/monitor-app:v1
+          imagePullPolicy: Always
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+            requests:
+              memory: "128Mi"
+              cpu: "250m"

@@ -1,30 +1,66 @@
 ---
-- name: Provision production server in Aws with Docker
+- name: Provision production server in AWS with Docker
   hosts: production_servers
   become: true
+  vars:
+    docker_gpg_key_checksum: "sha256:1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570"
 
   tasks:
-    - name: Apt update
+    - name: Update apt cache
       apt:
-        update_cache: yes
-        force_apt_get: yes
+        update_cache: true
+        cache_valid_time: 3600
 
-    - name: Install dependencies for Docker
+    - name: Install Docker repository prerequisites
       apt:
-        name: 
+        name:
           - apt-transport-https
           - ca-certificates
           - curl
           - gnupg
-          - lsb-release
         state: present
-    - name: Install Docker
-      shell: "curl -fsSL https://docker.com | sudo sh"
-      args:
-        creates: /usr/bin/docker
-    - name: Make sure Docker service is running
-      service:
+
+    - name: Create apt keyring directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install Docker repository signing key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        owner: root
+        group: root
+        mode: '0644'
+        checksum: "{{ docker_gpg_key_checksum | default(omit) }}"
+
+    - name: Configure Docker apt repository
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [arch={{ ansible_architecture | replace('x86_64', 'amd64') }}
+          signed-by=/etc/apt/keyrings/docker.asc]
+          https://download.docker.com/linux/ubuntu
+          {{ ansible_distribution_release }} stable
+        filename: docker
+        state: present
+        update_cache: true
+
+    - name: Install Docker Engine
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+
+    - name: Ensure Docker service is running
+      ansible.builtin.service:
         name: docker
         state: started
-        enabled: yes
+        enabled: true
 
