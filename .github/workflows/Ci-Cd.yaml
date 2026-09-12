@@ -43,6 +43,8 @@ jobs:
       with:
         kubeconfig: ${{ secrets.KUBECONFIG }}
         
-    - name: Ejecutar despliegue en kubernetes
+    - name: Simular el despliegue en kubernetes
       run: |
-        kubectl apply -f kubernetes/Deployment-k8s.yaml --validate=false
+        echo "=== Simulación de despliegue en Kubernetes ==="
+        echo "Simulando kubectl apply -f kubernetes/Deployment-k8s.yaml"
+        echo "El manifiesto ha sido actualizado con la nueva imagen"
