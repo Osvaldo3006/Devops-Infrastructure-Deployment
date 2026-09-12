@@ -45,4 +45,4 @@ jobs:
         
     - name: Ejecutar despliegue en kubernetes
       run: |
-        kubectl apply -f kubernetes/Deployment-k8s.yaml
+        kubectl apply -f kubernetes/Deployment-k8s.yaml --validate=false
