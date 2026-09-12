@@ -8,7 +8,7 @@ def probar_servidor (host):
     try:
         # ejecutamos el ping (3 segundos de timeout maximo)
         resultado = subprocess.run(
-             ["ping","-n","1","-w", "5000",host],
+             ["ping","-c","1","-w", "5000",host],
                 capture_output=True,
                 text=True,
                 timeout=8)

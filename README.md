@@ -17,8 +17,8 @@ Monitor.py -> Docker image -> Docker Hub -> Kubernetes
 ```
 
 Terraform provisions an AWS EC2 instance and security group. Ansible installs
-Docker on the remote host. Kubernetes runs two monitor replicas and exposes a
-NodePort service.
+Docker on the remote host. Kubernetes runs two monitor replicas and provide a
+ClusterIP service.
 
 ## Repository Structure
 
@@ -38,7 +38,7 @@ devops-infrastructure-deployment/
 │   ├── Monitor.py
 │   └── requirements.txt
 └── kubernetes/
-    ├── Deployment-k8s.Yaml
+    ├── Deployment-k8s.yaml
     └── K8s-service.yaml
 ```
 
@@ -118,7 +118,7 @@ kubectl rollout status deployment/monitor-server
 
 El campo `image` del Deployment debe contener una etiqueta concreta, por
 ejemplo `osva3097/monitor-app:abc1234`. Kubernetes no reemplaza expresiones de
-GitHub Actions dentro de `Deployment-k8s.Yaml` automáticamente.
+GitHub Actions dentro de `Deployment-k8s.yaml` automáticamente.
 
 You can build the image locally with:
 
@@ -132,7 +132,7 @@ After publishing an image that your cluster can pull, apply the manifests from
 the repository root:
 
 ```bash
-kubectl apply -f kubernetes/Deployment-k8s.Yaml
+kubectl apply -f kubernetes/Deployment-k8s.yaml
 kubectl apply -f kubernetes/K8s-service.yaml
 ```
 
@@ -159,12 +159,6 @@ package.
 
 ## Current Limitations
 
-- The Kubernetes Deployment currently references the placeholder image
-  `kodekloud/examplevotingapp_vote:v1` instead of the image published by the
-  workflow.
-- The Deployment and Service selectors do not currently match, so the Service
-  will not route traffic to the Deployment's pods until the manifests are
-  aligned.
 - `Monitor.py` is a command-line monitor and does not expose an HTTP API, even
   though the container and Kubernetes manifests declare port `5000`.
 - The repository does not currently include an Ansible inventory file or a K3s
