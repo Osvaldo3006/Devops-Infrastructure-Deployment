@@ -1,0 +1,47 @@
+name: CI Build Monitor App
+# El pipeline se activa automáticamente cada vez que hay un push a main.
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-scan-and-push:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Descargar el código
+      uses: actions/checkout@v4
+
+    - name: Configurar tags de la imagen
+      id: vars
+      run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+    - name: Iniciar sesión en Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Construir la imagen localmente
+      uses: docker/build-push-action@v6
+      with:
+        context: ./app
+        load: true
+        tags: |
+          ${{ secrets.DOCKERHUB_USERNAME }}/monitor-app:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/monitor-app:v1
+          ${{ secrets.DOCKERHUB_USERNAME }}/monitor-app:${{ steps.vars.outputs.sha_short }}
+
+    - name: Inspeccionar vulnerabilidades con Trivy
+      uses: aquasecurity/trivy-action@0.28.0
+      with:
+        image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/monitor-app:${{ steps.vars.outputs.sha_short }}
+        format: table
+        exit-code: '1'
+        ignore-unfixed: true
+        severity: CRITICAL,HIGH
+
+    - name: Publicar imágenes verificadas
+      run: |
+        docker push "${{ secrets.DOCKERHUB_USERNAME }}/monitor-app:latest"
+        docker push "${{ secrets.DOCKERHUB_USERNAME }}/monitor-app:v1"
+        docker push "${{ secrets.DOCKERHUB_USERNAME }}/monitor-app:${{ steps.vars.outputs.sha_short }}"
