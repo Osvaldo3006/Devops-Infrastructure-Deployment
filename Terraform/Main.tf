@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.5.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -19,20 +21,57 @@ variable "instance_type" {
   default     = "t3.micro"
 }
 
+variable "project_name" {
+  description = "Short name used for AWS resource names and tags."
+  type        = string
+  default     = "monitor-project"
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]+$", var.project_name)) && length(var.project_name) >= 3
+    error_message = "project_name must contain at least 3 lowercase letters, numbers, or hyphens."
+  }
+}
+
+variable "environment" {
+  description = "Deployment environment used in AWS tags."
+  type        = string
+  default     = "Production"
+
+  validation {
+    condition     = length(trimspace(var.environment)) > 0
+    error_message = "environment must not be empty."
+  }
+}
+
 variable "key_name" {
   description = "Existing AWS EC2 key pair name used for SSH access."
   type        = string
+
+  validation {
+    condition     = length(trimspace(var.key_name)) > 0
+    error_message = "key_name must reference an existing AWS EC2 key pair."
+  }
 }
 
 variable "ssh_cidr_blocks" {
   description = "CIDR blocks allowed to connect to SSH. Keep this limited to trusted admin IPs."
   type        = set(string)
+
+  validation {
+    condition     = length(var.ssh_cidr_blocks) > 0 && alltrue([for cidr in var.ssh_cidr_blocks : can(cidrhost(cidr, 0))])
+    error_message = "ssh_cidr_blocks must contain at least one valid CIDR block."
+  }
 }
 
 variable "nodeport_cidr_blocks" {
   description = "CIDR blocks allowed to reach the Kubernetes NodePort. Empty disables public NodePort access."
   type        = set(string)
   default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.nodeport_cidr_blocks : can(cidrhost(cidr, 0))])
+    error_message = "nodeport_cidr_blocks must contain only valid CIDR blocks."
+  }
 }
 
 provider "aws" {
@@ -61,7 +100,7 @@ data "aws_ami" "ubuntu" {
 
 # 1. Create a security group with restricted inbound access.
 resource "aws_security_group" "monitor_sg" {
-  name        = "monitor-project-sg"
+  name        = "${var.project_name}-sg"
   description = "Firewall for the DevOps monitoring project"
 
   # SSH is limited to the administrator-provided CIDR blocks.
@@ -124,8 +163,8 @@ resource "aws_instance" "monitor_server" {
   vpc_security_group_ids = [aws_security_group.monitor_sg.id]
 
   tags = {
-    Name        = "servidor-monitor-devops"
-    Environment = "Production"
+    Name        = "${var.project_name}-server"
+    Environment = var.environment
   }
 }
 

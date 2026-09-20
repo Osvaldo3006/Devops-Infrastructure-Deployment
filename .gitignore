@@ -157,6 +157,18 @@ ENV/
 env.bak/
 venv.bak/
 
+# Terraform local state, variables, plans, and overrides
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
 # Spyder project settings
 .spyderproject
 .spyproject

@@ -60,22 +60,27 @@ From the repository root:
 cd Terraform
 terraform init
 terraform validate
-terraform apply \
-  -var='key_name=<your-aws-key-pair>' \
-  -var='ssh_cidr_blocks=["<your-public-ip>/32"]'
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your key pair and trusted public IP.
+terraform plan
+terraform apply
 ```
 
 The output `instancia_ip_publica` contains the EC2 public IP. The current
 Terraform configuration uses `us-east-1` and creates a `t3.micro` by default.
-SSH access is limited to the `ssh_cidr_blocks` value supplied at apply time.
+SSH access is limited to the `ssh_cidr_blocks` value supplied in the local
+`terraform.tfvars` file. That file is ignored by Git and must never contain
+AWS credentials or private keys. Configure AWS credentials through the AWS
+CLI profile or supported `AWS_*` environment variables.
 NodePort access on port `32000` is disabled unless you explicitly provide
 `nodeport_cidr_blocks`, for example:
 
 ```bash
-terraform apply \
-  -var='key_name=<your-aws-key-pair>' \
-  -var='ssh_cidr_blocks=["<your-public-ip>/32"]' \
-  -var='nodeport_cidr_blocks=["<trusted-client-ip>/32"]'
+# In terraform.tfvars:
+nodeport_cidr_blocks = ["<trusted-client-ip>/32"]
+
+terraform plan
+terraform apply
 ```
 
 The security group does not open port `5000`; `Monitor.py` does not expose an

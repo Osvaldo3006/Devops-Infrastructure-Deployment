@@ -1,0 +1,9 @@
+aws_region    = "us-east-1"
+instance_type = "t3.micro"
+project_name  = "monitor-project"
+environment   = "Production"
+
+# Replace with an existing EC2 key pair and your trusted public IP.
+key_name         = "replace-with-ec2-key-pair"
+ssh_cidr_blocks  = ["203.0.113.10/32"]
+nodeport_cidr_blocks = []
