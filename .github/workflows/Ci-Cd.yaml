@@ -1,50 +1,47 @@
-name: CI/CD Deploy Monitor App 
-# El pipeline se activará automáticamente cada vez que hagas un push a la rama main
+name: CI Build Monitor App
+# El pipeline se activa automáticamente cada vez que hay un push a main.
 on:
   push:
     branches: [ "main" ]
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest # GitHub nos presta una máquina Linux virtual para correr este proceso
+  build-scan-and-push:
+    runs-on: ubuntu-latest
     steps:
-    - name: Descargar el código del repositorio
+    - name: Descargar el código
       uses: actions/checkout@v4
 
-    - name: Configurar Tag de la Imagen
+    - name: Configurar tags de la imagen
       id: vars
       run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-    - name: Iniciar sesión en Docker Hub de forma segura
+    - name: Iniciar sesión en Docker Hub
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Construir la imagen de Docker y subirla (Push)
-      id: docker_build
-      uses: docker/build-push-action@v5
+    - name: Construir la imagen localmente
+      uses: docker/build-push-action@v6
       with:
-        context: ./app  # Le indica a GitHub que el Dockerfile está dentro de la carpeta app
-        push: true
-        # Reemplaza las credenciales por variables de entorno para que no se vean en el código
+        context: ./app
+        load: true
         tags: |
           ${{ secrets.DOCKERHUB_USERNAME }}/monitor-app:latest
           ${{ secrets.DOCKERHUB_USERNAME }}/monitor-app:v1
           ${{ secrets.DOCKERHUB_USERNAME }}/monitor-app:${{ steps.vars.outputs.sha_short }}
-    - name: Inyectar diges SHA256 en el manifiesto de Kubernetes
-      run: |
-        # Obtener el digest SHA256 de la imagen recién subida
-        IMAGE_WITH_DIGEST="${{ secrets.DOCKERHUB_USERNAME }}/monitor-app@${{ steps.docker_build.outputs.digest }}"
-        echo "IMAGE_DIGEST=$IMAGE_WITH_DIGEST" >> $GITHUB_ENV      
-        sed -i "s|image:.*monitor-app.*|image: ${IMAGE_WITH_DIGEST}|g" kubernetes/Deployment-k8s.yaml
-    - name: Configurar contexto y desplegar en kubernetes
-      uses: azure/k8s-set-context@v3
+
+    - name: Inspeccionar vulnerabilidades con Trivy
+      uses: aquasecurity/trivy-action@0.28.0
       with:
-        kubeconfig: ${{ secrets.KUBECONFIG }}
-        
-    - name: Simular el despliegue en kubernetes
+        image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/monitor-app:${{ steps.vars.outputs.sha_short }}
+        format: table
+        exit-code: '1'
+        ignore-unfixed: true
+        severity: CRITICAL,HIGH
+
+    - name: Publicar imágenes verificadas
       run: |
-        echo "=== Simulación de despliegue en Kubernetes ==="
-        echo "Simulando kubectl apply -f kubernetes/Deployment-k8s.yaml"
-        echo "El manifiesto ha sido actualizado con la nueva imagen"
+        docker push "${{ secrets.DOCKERHUB_USERNAME }}/monitor-app:latest"
+        docker push "${{ secrets.DOCKERHUB_USERNAME }}/monitor-app:v1"
+        docker push "${{ secrets.DOCKERHUB_USERNAME }}/monitor-app:${{ steps.vars.outputs.sha_short }}"
